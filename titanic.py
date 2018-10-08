@@ -12,7 +12,11 @@ import matplotlib.pyplot as plt
 import seaborn
 from  sklearn.feature_extraction import DictVectorizer as DV
 from sklearn.grid_search import GridSearchCV
+import re
 #import xgboost
+
+#"Mr","Mrs","Miss","Master","Don","Rev","Dr","Mme","Ms","Major","Lady","Sir",
+#"Mlle","Col","Capt","Countess","Jonkheer"
 
 from sklearn import metrics, preprocessing
 from sklearn import linear_model, svm, neighbors, ensemble
@@ -28,11 +32,36 @@ test_data = pd.read_csv('test.csv')
 y = data['Survived']
 X = data.drop('Survived', axis = 1)
 
-X = X.drop(['PassengerId', 'Name', 'Ticket', 'Cabin'], axis = 1)
-X_test = test_data.drop(['PassengerId', 'Name', 'Ticket', 'Cabin'], axis = 1)
+X = X.drop(['PassengerId', 'Ticket'], axis = 1)
+X_test = test_data.drop(['PassengerId', 'Ticket'], axis = 1)
 
-category_features = ['Sex']#, 'Pclass']#, 'Embarked']
-numeric_features = ['Age', 'Pclass']#, 'SibSp', 'Parch', 'Fare']
+X['Family'] = X['SibSp'] + X['Parch']
+X_test['Family'] = X_test['SibSp'] + X_test['Parch']
+X['isCabin'] = X['Cabin'].map(lambda x: 'y' if x != x else 'n')
+X_test['isCabin'] = X_test['Cabin'].map(lambda x: 'y' if x != x else 'y')
+X['Title'] = [re.match('[\s\S]*(Mrs|Mr|Miss|Master|Don|Rev|Dr|Mme|Ms|Major|Lady|Sir|Mlle|Col|Capt|Countess|Jonkheer)', name).group(1) for name in X['Name']]
+X_test['Title'] = [re.match('[\s\S]*(Mrs|Mr|Miss|Master|Don|Rev|Dr|Mme|Ms|Major|Lady|Sir|Mlle|Col|Capt|Countess|Jonkheer)', name).group(1) for name in X_test['Name']]
+
+X = X.drop(['Name'], axis = 1)
+X_test = X_test.drop(['Name'], axis = 1)
+
+X.loc[X['Title'].isin(["Capt", "Col", "Don", "Dr", "Jonkheer", "Lady", "Major", "Rev", "Sir", "Countess"]), 'Title'] = 'Aristoctratic'
+X.loc[X['Title'].isin(["Ms", "Mlle"]), 'Title'] = 'Miss'
+X.loc[X['Title'].isin(["Mme", "Mlle"]), 'Title'] = 'Mrs'
+
+X_test.loc[X_test['Title'].isin(["Capt", "Col", "Don", "Dr", "Jonkheer", "Lady", "Major", "Rev", "Sir", "Countess"]), 'Title'] = 'Aristoctratic'
+X_test.loc[X_test['Title'].isin(["Ms", "Mlle"]), 'Title'] = 'Miss'
+X_test.loc[X_test['Title'].isin(["Mme", "Mlle"]), 'Title'] = 'Mrs'
+
+titles = ['Mr', 'Mrs', 'Miss', 'Master', 'Aristoctratic']
+
+for title in titles:
+  val_to_fill = X.loc[X['Title'] == title, 'Age'].median()
+  X.loc[X['Title'] == title, 'Age'] =  X.loc[X['Title'] == title, 'Age'].fillna(val_to_fill)
+  X_test.loc[X_test['Title'] == title, 'Age'] =  X_test.loc[X_test['Title'] == title, 'Age'].fillna(val_to_fill)
+
+category_features = ['Sex', 'Title']#, 'Embarked']
+numeric_features = ['Age', 'Pclass', 'Family', 'Fare']#, 'SibSp', 'Parch', 'Fare']
 
 X[category_features] = X[category_features].fillna('NoData')
 #X.loc[X['Pclass'] == 1, 'Pclass'] = 'First'
@@ -40,12 +69,13 @@ X[category_features] = X[category_features].fillna('NoData')
 #X.loc[X['Pclass'] == 3, 'Pclass']  = 'Third'
 
 X_test[category_features] = X_test[category_features].fillna('NoData')
+X_test['Fare'] = X_test['Fare'].fillna(X.loc[X['Pclass'] == 3, 'Fare'].median())
 #X_test.loc[X_test['Pclass'] == 1, 'Pclass'] = 'First'
 #X_test.loc[X_test['Pclass'] == 2, 'Pclass']  = 'Second'
 #X_test.loc[X_test['Pclass'] == 3, 'Pclass']  = 'Third'
 
-X['Age'] = X['Age'].fillna(X['Age'].median(axis = 0)) # X_train['Age'].mean()
-X_test['Age'] = X_test['Age'].fillna(X['Age'].median(axis = 0)) 
+#X['Age'] = X['Age'].fillna(X['Age'].median(axis = 0)) # X_train['Age'].mean()
+#X_test['Age'] = X_test['Age'].fillna(X['Age'].median(axis = 0)) 
 
 #X_train, X_test, y_train, y_test = ms.train_test_split(X, y, test_size = 0.3, random_state = 0, shuffle = False)
 X_train = X
@@ -62,35 +92,48 @@ whole_train_matrix = np.hstack((X_train[numeric_features], encoded_train_data))
 whole_test_matrix = np.hstack((X_test[numeric_features], encoded_test_data))
 
 param_log = {
-        'penalty': ['l2'],
-        'C': [0.01, 0.1, 1, 10],
-        'solver' : [ 'liblinear', 'newton-cg', 'lbfgs', 'sag', 'saga'],
-        'max_iter': [100, 200]
+        'penalty': ['l1', 'l2'],
+        'C': [0.01, 0.1, 1, 2, 3, 4, 5, 10],
+        'solver' : [ 'liblinear'],
+        'max_iter': [100, 500],
+        'tol': [0.0001, 0.00001, 0.00001],
+        'class_weight': [None, 'balanced']
         }
+#survived = y[y == 1]
+#isCabin_surv = data.iloc[survived.index]['Cabin'].map(lambda x: 0 if x != x else 1)
+#n_survived = y[y == 0]
+#isCabin_n_surv = data.iloc[n_survived.index]['Cabin'].map(lambda x: 0 if x != x else 1)
+#colors = ['blue','green']
+#plt.hist([isCabin_surv, isCabin_n_surv],  histtype='bar', color=colors, stacked=True, fill=True, label = ['survived', 'not survived'])
+#plt.legend()
 
 linear_model_titanic = linear_model.LogisticRegression(random_state = 0)
-#linear_search_res = ms.GridSearchCV(linear_model_titanic, param_log)
+linear_search_res = ms.GridSearchCV(linear_model_titanic, param_log)
 linear_model_titanic.fit(whole_train_matrix, y)
-#linear_search_res.fit(whole_train_matrix, y_train)
-predictions = linear_model_titanic.predict_proba(whole_test_matrix)
-predictions = [1 if prediction[1] > 0.62 else 0 for prediction in predictions]
-#score_logistic = ms.cross_val_score(linear_model_titanic, whole_test_matrix, y_test, cv = 3).mean()
-#score_search_logistic = ms.cross_val_score(linear_search_res, whole_test_matrix, y_test, cv = 3).mean()
+linear_search_res.fit(whole_train_matrix, y)
+predictions = linear_search_res.predict_proba(whole_test_matrix)
+predictions = [1 if prediction[1] > 0.5 else 0 for prediction in predictions]
+score_logistic = ms.cross_val_score(linear_model_titanic, whole_train_matrix, y, cv = 3).mean()
+score_search_logistic = ms.cross_val_score(linear_search_res.best_estimator_, whole_train_matrix, y, cv = 3).mean()
+#answer = pd.DataFrame()
+#answer['PassengerId'] = test_data['PassengerId']
+#answer['Survived'] = predictions
+#answer.to_csv('a.csv', index = False)
 
-#RF_model_titanic = ensemble.RandomForestClassifier(n_estimators = 100)
+RF_model_titanic = ensemble.RandomForestClassifier(n_estimators = 100)
 #RF_model_titanic.fit(whole_train_matrix, y)
 
-#score_RF = ms.cross_val_score(RF_model_titanic, whole_test_matrix, y_test, cv = 3).mean()
+score_RF = ms.cross_val_score(RF_model_titanic, whole_train_matrix, y, cv = 3).mean()
 #predictions = RF_model_titanic.predict(whole_test_matrix)
-#KN_model_titanic = neighbors.KNeighborsClassifier(n_neighbors = 5)
+KN_model_titanic = neighbors.KNeighborsClassifier(n_neighbors = 5)
 #KN_model_titanic.fit(whole_train_matrix, y)
-#score_KN = ms.cross_val_score(KN_model_titanic, whole_test_matrix, y_test, cv = 3).mean()
-#predictions = linear_model_titanic.predict(whole_test_matrix)
-
-answer = pd.DataFrame()
-answer['PassengerId'] = test_data['PassengerId']
-answer['Survived'] = predictions
-answer.to_csv('a.csv', index = False)
+score_KN = ms.cross_val_score(KN_model_titanic, whole_train_matrix, y, cv = 3).mean()
+#predictions = KN_model_titanic.predict_proba(whole_test_matrix)
+#predictions = [1 if prediction[1] > 0.6 else 0 for prediction in predictions]
+#answer = pd.DataFrame()
+#answer['PassengerId'] = test_data['PassengerId']
+#answer['Survived'] = predictions
+#answer.to_csv('a.csv', index = False)
 #Radius_model_titanic = neighbors.RadiusNeighborsClassifier(radius = 1, outlier_label=1)
 #Radius_model_titanic.fit(whole_train_matrix, y_train)
 #score_radius = ms.cross_val_score(Radius_model_titanic, whole_test_matrix, y_test, cv = 3).mean()
@@ -101,13 +144,23 @@ param_SVM = {'kernel': ['rbf', 'sigmoid'],
         'coef0': [0, 0.01, 0.1, 1, 5],
         'shrinking': [True, False]}
 
-#SVM_model_titanic = svm.SVC(random_state = 0)
+SVM_model_titanic = svm.SVC(random_state = 0, probability=True)
 #search_param_res = ms.GridSearchCV(SVM_model_titanic, param_SVM, cv = 3)
-#SVM_model_titanic.fit(whole_train_matrix, y_train)
-#search_param_res.fit(whole_train_matrix, y_train)
+SVM_model_titanic.fit(whole_train_matrix, y)
+#search_param_res.fit(whole_train_matrix, y)
 #score_SVM = ms.cross_val_score(SVM_model_titanic, whole_test_matrix, y_test, scoring = 'accuracy', cv = 3).mean()
-#score_SVM_gridSearch = ms.cross_val_score(search_param_res, whole_test_matrix, y_test, scoring = 'accuracy', cv = 3).mean()
+#score_SVM_gridSearch = ms.cross_val_score(search_param_res.best_estimator_, whole_train_matrix, y, scoring = 'accuracy', cv = 3).mean()
+score_SVM = ms.cross_val_score(SVM_model_titanic, whole_train_matrix, y, scoring = 'accuracy', cv = 3).mean()
 
+print(str.format('logistic {0}, logisticGridCV {4} RF {1}, KN {2}, SVM {3}', \
+                 score_logistic, score_RF, score_KN, score_SVM, \
+                 score_search_logistic))
+predictions = SVM_model_titanic.predict_proba(whole_test_matrix)
+predictions = [1 if prediction[1] > 0.5 else 0 for prediction in predictions]
+answer = pd.DataFrame()
+answer['PassengerId'] = test_data['PassengerId']
+answer['Survived'] = predictions
+answer.to_csv('a.csv', index = False)
 #xgb_model_titanic = xgboost.XGBClassifier()
 #xgb_model_titanic.fit(whole_train_matrix, y_train)
 #score_xgb = ms.cross_val_score(xgb_model_titanic, whole_test_matrix, y_test, cv = 3).mean()
