@@ -32,8 +32,8 @@ test_data = pd.read_csv('test.csv')
 y = data['Survived']
 X = data.drop('Survived', axis = 1)
 
-X = X.drop(['PassengerId', 'Ticket'], axis = 1)
-X_test = test_data.drop(['PassengerId', 'Ticket'], axis = 1)
+X = X.drop(['PassengerId'], axis = 1)
+X_test = test_data.drop(['PassengerId'], axis = 1)
 
 X['Family'] = X['SibSp'] + X['Parch']
 X_test['Family'] = X_test['SibSp'] + X_test['Parch']
@@ -41,6 +41,70 @@ X['isCabin'] = X['Cabin'].map(lambda x: 'y' if x != x else 'n')
 X_test['isCabin'] = X_test['Cabin'].map(lambda x: 'y' if x != x else 'y')
 X['Title'] = [re.match('[\s\S]*(Mrs|Mr|Miss|Master|Don|Rev|Dr|Mme|Ms|Major|Lady|Sir|Mlle|Col|Capt|Countess|Jonkheer)', name).group(1) for name in X['Name']]
 X_test['Title'] = [re.match('[\s\S]*(Mrs|Mr|Miss|Master|Don|Rev|Dr|Mme|Ms|Major|Lady|Sir|Mlle|Col|Capt|Countess|Jonkheer)', name).group(1) for name in X_test['Name']]
+X['Ticket_prefix'] = [re.search('[\w\W]+ ', ticket).group(0).strip() if re.search('[\w\W]+ ', ticket) else 'NoPrefix' for ticket in X['Ticket']]
+X['Ticket_number'] = [re.search(' [\d]+|[\d]+', ticket).group(0).strip() if re.search(' [\d]+|[\d]+', ticket) else 0 for ticket in X['Ticket']]
+X['Ticket_number'] = X['Ticket_number'].astype('int')
+X['Odd'] = [t%2 for t in X['Ticket_number']]
+
+X_test['Ticket_prefix'] = [re.search('[\w\W]+ ', ticket).group(0).strip() if re.search('[\w\W]+ ', ticket) else 'NoPrefix' for ticket in X_test['Ticket']]
+X_test['Ticket_number'] = [re.search(' [\d]+', ticket).group(0).strip() if re.search(' [\d]+', ticket) else 0 for ticket in X_test['Ticket']]
+X_test['Ticket_number'] = X_test['Ticket_number'].astype('int')
+
+X.loc[X['Ticket_prefix'].isin(["A./5.", "A.5.", "A/5", "A/5.", "A/S",\
+      "A/4", "A/4.", "A4.", 'AQ/4', 'A. 2.', 'AQ/3.', 'S.C./A.4.', 'SC/A4', 'Fa']), 'Ticket_prefix'] = 'A4A5'
+#X.loc[X['Ticket_prefix'].isin(["A/4", "A/4.", "A4."]), 'Ticket_prefix'] = 'A4'
+X.loc[X['Ticket_prefix'].isin(["C.A.", "CA", "CA.", "W./C.", "W/C", 'C.A./SOTON']), 'Ticket_prefix'] = 'CA'
+X.loc[X['Ticket_prefix'].isin(["W.E.P."]), 'Ticket_prefix'] = 'WE/P'
+X.loc[X['Ticket_prefix'].isin(["SW/PP", "S.W./PP", 'P/PP', 'PP', 'LP']), 'Ticket_prefix'] = 'P/SW/PP'
+X.loc[X['Ticket_prefix'].isin(["STON/O 2.", "STON/O2."]), 'Ticket_prefix'] = 'SOTON/O2'
+X.loc[X['Ticket_prefix'].isin(["SOTON/O.Q.", 'STON/OQ.']), 'Ticket_prefix'] = 'SOTON/OQ'
+X.loc[X['Ticket_prefix'].isin(["S.O.C.", 'S.O./P.P.', 'S.O.P.', 'S.P.']), 'Ticket_prefix'] = 'SO/C'
+X.loc[X['Ticket_prefix'].isin(["SC/AH Basle", 'SC/PARIS', 'S.C./PARIS',\
+           'SC/Paris', 'SC/AH', 'SC', 'SCO/W', 'C']), 'Ticket_prefix'] = 'SC'
+
+X_test.loc[X_test['Ticket_prefix'].isin(["A./5.", "A.5.", "A/5", "A/5.", "A/S",\
+           "A/4", "A/4.", "A4.", 'AQ/4', 'A. 2.', 'AQ/3.', 'S.C./A.4.', 'SC/A4', 'Fa']), 'Ticket_prefix'] = 'A4A5'
+X_test.loc[X_test['Ticket_prefix'].isin(["A/4", "A/4.", "A4."]), 'Ticket_prefix'] = 'A4'
+X_test.loc[X_test['Ticket_prefix'].isin(["C.A.", "CA", "CA.", "W./C.", "W/C", 'C.A./SOTON']), 'Ticket_prefix'] = 'CA'
+X_test.loc[X_test['Ticket_prefix'].isin(["W.E.P."]), 'Ticket_prefix'] = 'WE/P'
+X_test.loc[X_test['Ticket_prefix'].isin(["SW/PP", "S.W./PP", 'P/PP', 'PP', 'LP']), 'Ticket_prefix'] = 'P/SW/PP'
+X_test.loc[X_test['Ticket_prefix'].isin(["STON/O 2.", "STON/O2."]), 'Ticket_prefix'] = 'SOTON/O2'
+X_test.loc[X_test['Ticket_prefix'].isin(["SOTON/O.Q.", 'STON/OQ.']), 'Ticket_prefix'] = 'SOTON/OQ'
+X_test.loc[X_test['Ticket_prefix'].isin(["S.O.C.", 'S.O./P.P.', 'S.O.P.']), 'Ticket_prefix'] = 'SO/C'
+X_test.loc[X_test['Ticket_prefix'].isin(["SC/AH Basle", 'SC/PARIS', 'S.C./PARIS',\
+           'SC/Paris', 'SC/AH', 'SC', 'SCO/W', 'SC/A.3', 'C']), 'Ticket_prefix'] = 'SC'
+#  A/4, A/4., A4.,
+# A./5., A.5., A/5, A/5., A/S,
+# C, 
+# C.A., CA, CA.,
+# C.A./SOTON,  F.C., F.C.C., Fa, 
+# P/PP, LINE, PC, PP, S.C./A.4.,  
+# S.O./P.P.,  S.O.P., S.P., SC, SCO/W,
+# SC/AH, SC/AH Basle, 
+# SO/C,  S.O.C.,
+# S.C./PARIS, SC/PARIS, SC/Paris
+# S.W./PP, SW/PP,
+# W./C., W/C, 
+# SOTON/O.Q., SOTON/OQ,
+# SOTON/O2,  STON/O 2., STON/O2., 
+# W.E.P., WE/P
+prefix_count = pd.value_counts(X['Ticket_prefix'])
+survived_prefix = [{ prefix: [
+  {'total' : prefix_count[prefix]},
+  {'survived' : [list(pd.value_counts(y[X[X['Ticket_prefix'] == prefix].index]).index), list(pd.value_counts(y[X[X['Ticket_prefix'] == prefix].index]).values)] },
+  {'class': [list(pd.value_counts(data.iloc[X[X['Ticket_prefix'] == prefix].index]['Pclass']).index), list(pd.value_counts(data.iloc[X[X['Ticket_prefix'] == prefix].index]['Pclass']).values)]}]
+  }  for prefix in prefix_count.index] 
+
+prefix_count_test = pd.value_counts(X_test['Ticket_prefix'])
+survived_prefix_test = [{ prefix: [
+  {'total' : prefix_count_test[prefix]},
+  #{'survived' : [list(pd.value_counts(y[X[X['Ticket_prefix'] == prefix].index]).index), list(pd.value_counts(y[X[X['Ticket_prefix'] == prefix].index]).values)] },
+  {'class': [list(pd.value_counts(test_data.iloc[X_test[X_test['Ticket_prefix'] == prefix].index]['Pclass']).index), list(pd.value_counts(test_data.iloc[X_test[X_test['Ticket_prefix'] == prefix].index]['Pclass']).values)]}]
+  }  for prefix in prefix_count_test.index] 
+
+X['Deck'] = [re.search('(\w)(\d{0,3}?)$', cabin).group(1) if cabin == cabin else 'NoData' for cabin in X['Cabin']]
+X['Cabin_num'] = [re.search('(\w)(\d{0,3}?)$', cabin).group(2) if cabin == cabin and re.search('(\w)(\d{0,3}?)$', cabin).group(2) != '' else 0 for cabin in X['Cabin']]
+X['Cabin_num'] = X['Cabin_num'].astype('int')
 
 X = X.drop(['Name'], axis = 1)
 X_test = X_test.drop(['Name'], axis = 1)
@@ -112,13 +176,13 @@ linear_search_res = ms.GridSearchCV(linear_model_titanic, param_log)
 linear_model_titanic.fit(whole_train_matrix, y)
 linear_search_res.fit(whole_train_matrix, y)
 predictions = linear_search_res.predict_proba(whole_test_matrix)
-predictions = [1 if prediction[1] > 0.5 else 0 for prediction in predictions]
+predictions = [1 if prediction[1] > 0.6 else 0 for prediction in predictions]
 score_logistic = ms.cross_val_score(linear_model_titanic, whole_train_matrix, y, cv = 3).mean()
 score_search_logistic = ms.cross_val_score(linear_search_res.best_estimator_, whole_train_matrix, y, cv = 3).mean()
-#answer = pd.DataFrame()
-#answer['PassengerId'] = test_data['PassengerId']
-#answer['Survived'] = predictions
-#answer.to_csv('a.csv', index = False)
+answer = pd.DataFrame()
+answer['PassengerId'] = test_data['PassengerId']
+answer['Survived'] = predictions
+answer.to_csv('a.csv', index = False)
 
 RF_model_titanic = ensemble.RandomForestClassifier(n_estimators = 100)
 #RF_model_titanic.fit(whole_train_matrix, y)
@@ -156,7 +220,7 @@ print(str.format('logistic {0}, logisticGridCV {4} RF {1}, KN {2}, SVM {3}', \
                  score_logistic, score_RF, score_KN, score_SVM, \
                  score_search_logistic))
 predictions = SVM_model_titanic.predict_proba(whole_test_matrix)
-predictions = [1 if prediction[1] > 0.5 else 0 for prediction in predictions]
+predictions = [1 if prediction[1] > 0.6 else 0 for prediction in predictions]
 answer = pd.DataFrame()
 answer['PassengerId'] = test_data['PassengerId']
 answer['Survived'] = predictions
